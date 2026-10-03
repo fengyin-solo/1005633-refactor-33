@@ -30,6 +30,8 @@ export type PageResult = {
 export type ActionResult = {
   ok: boolean
   message: string
+  /** 同一结论重复提交：结论只记一遍，这里给页面一个轻提示而不是当成错误。 */
+  duplicated?: boolean
 }
 
 export type OverviewResult = {

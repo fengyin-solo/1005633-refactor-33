@@ -64,8 +64,9 @@
     </table>
 
     <footer class="page-foot">
-      <span>共 {{ total }} 条管网探漏记录</span>
+      <span>共 {{ total }} 条管网探漏记录 · 现场探测方法由班组统一，复探周期由班组排</span>
       <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
+      <span v-else-if="noticeMessage" class="info-text">{{ noticeMessage }}</span>
     </footer>
   </section>
 </template>
@@ -82,14 +83,14 @@ import {
 import type { EntryRow } from '@/data/types'
 
 const meta = moduleMeta('leakdetect')
-const columns = ["探漏编号", "探测管段", "探测方法", "漏点数量", "漏点位置", "处理建议", "探测日期", "探漏状态"]
+const columns = ["探漏编号", "探测管段", "探测方法", "漏点数量", "漏点位置", "处理建议", "探测日期", "复探周期", "探漏状态"]
 const actions = ["提交探测", "确认处理", "要求复探"]
 const statuses = ["待探测", "探测中", "已处理", "需复探"]
-const stats = [{"label": "待探测管段", "value": 0}, {"label": "探测中管段", "value": 0}, {"label": "本月漏点数", "value": 0}]
 
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
 const errorMessage = ref('')
+const noticeMessage = ref('')
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
 const statusSummary = computed(() =>
@@ -98,6 +99,21 @@ const statusSummary = computed(() =>
     count: rows.value.filter((row) => String(row.status) === status).length,
   })),
 )
+const stats = computed(() => [
+  { label: '待探测管段', value: rows.value.filter((row) => String(row.status) === '待探测').length },
+  { label: '探测中管段', value: rows.value.filter((row) => String(row.status) === '探测中').length },
+  {
+    label: '本月漏点数',
+    value: rows.value
+      .filter((row) => String(row['探测日期'] ?? '').startsWith(currentMonth()))
+      .reduce((sum, row) => sum + Number(row['漏点数量'] ?? 0), 0),
+  },
+])
+
+function currentMonth(): string {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+}
 
 function resetFilters() {
   filters.value = {}
@@ -105,7 +121,8 @@ function resetFilters() {
 }
 
 function exportRows() {
-  downloadEntries(meta.key)
+  // 与列表共用同一份取数口径（含当前筛选条件与统一处理建议判定）。
+  downloadEntries(meta.key, filters.value)
 }
 
 function openCreate() {
@@ -114,11 +131,14 @@ function openCreate() {
 
 function runAction(action: string, row: EntryRow) {
   errorMessage.value = ''
+  noticeMessage.value = ''
   const result = applyAction(meta.key, Number(row.id), action)
   if (!result.ok) {
     errorMessage.value = result.message
     return
   }
+  // 重复提交同一结论只记一遍：数据不重复写，给一条轻提示即可。
+  noticeMessage.value = result.message
   reload()
 }
 

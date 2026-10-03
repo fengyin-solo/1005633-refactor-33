@@ -63,6 +63,28 @@
       </tbody>
     </table>
 
+    <section class="review-block">
+      <h3>待复核清单（探漏复探结论）</h3>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th v-for="column in reviewColumns" :key="column">{{ column }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in reviewRows" :key="String(row.id)">
+            <td v-for="column in reviewColumns" :key="column">{{ row[column] ?? '—' }}</td>
+          </tr>
+          <tr v-if="!reviewRows.length">
+            <td :colspan="reviewColumns.length" class="empty-state">暂无待复核的复探记录，确认处理后自动移出清单</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="page-foot">
+        <span>复探结论由探漏记录提交后反映到这里，现场探测方法由班组统一，复探周期由班组排</span>
+      </p>
+    </section>
+
     <footer class="page-foot">
       <span>共 {{ total }} 条抢修处置记录</span>
       <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
@@ -76,6 +98,7 @@ import { computed, onMounted, ref } from 'vue'
 import {
   downloadEntries,
   listEntries,
+  listRepairReviews,
   moduleMeta,
   runAction as applyAction,
 } from '@/api/local-service'
@@ -86,8 +109,10 @@ const columns = ["抢修编号", "故障管段", "故障类型", "影响面积",
 const actions = ["派出抢修", "确认恢复", "上报升级"]
 const statuses = ["待派修", "抢修中", "已恢复", "已升级"]
 const stats = [{"label": "待派修故障", "value": 0}, {"label": "抢修中故障", "value": 0}, {"label": "本月恢复数", "value": 0}]
+const reviewColumns = ["探漏编号", "探测管段", "探测方法", "漏点数量", "处理建议", "探测日期", "复探周期"]
 
 const rows = ref<EntryRow[]>([])
+const reviewRows = ref<EntryRow[]>([])
 const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
@@ -128,6 +153,7 @@ function reload() {
     const payload = listEntries(meta.key, filters.value)
     rows.value = payload.items
     total.value = payload.total
+    reviewRows.value = listRepairReviews()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '抢修处置列表读取失败'
   }

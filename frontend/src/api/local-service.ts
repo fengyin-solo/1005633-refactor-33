@@ -1,9 +1,18 @@
 import { MODULE_BY_KEY } from '@/data/modules'
 import { allRows, listRows, resetRows, saveRows } from '@/data/local-store'
+import {
+  listLeakEntries,
+  listReinspectionReviews,
+  submitLeakAction,
+} from '@/data/leak-ops'
+import { LEAK_KEY } from '@/data/leak-policy'
+import { filterRows } from '@/data/query'
 import type { ActionResult, EntryRow, ModuleMeta, OverviewResult, PageResult } from '@/data/types'
 
 // 会写进数据的「往回走」动作：命中就把这条记录标成异常态，看板上能一眼看出来。
 const NEGATIVE_ACTIONS = ['撤销', '作废', '拒绝', '驳回', '停用', '忽略', '下线', '回滚']
+
+export { filterRows }
 
 export function moduleMeta(key: string): ModuleMeta {
   const meta = MODULE_BY_KEY.get(key)
@@ -13,22 +22,19 @@ export function moduleMeta(key: string): ModuleMeta {
   return meta
 }
 
-export function filterRows(rows: EntryRow[], filters: Record<string, string>): EntryRow[] {
-  const pairs = Object.entries(filters).filter(([, value]) => value.trim() !== '')
-  if (pairs.length === 0) {
-    return rows
-  }
-  return rows.filter((row) =>
-    pairs.every(([field, value]) => String(row[field] ?? '').includes(value.trim())),
-  )
-}
-
 export function listEntries(key: string, filters: Record<string, string> = {}): PageResult {
+  // 探漏沿用统一取数口径：列表、导出、抢修待复核都从这一份行数据出发。
+  if (key === LEAK_KEY) {
+    return listLeakEntries(filters)
+  }
   const matched = filterRows(listRows(key), filters)
   return { items: matched, total: matched.length, page: 1, size: matched.length }
 }
 
 export function runAction(key: string, id: number, action: string): ActionResult {
+  if (key === LEAK_KEY) {
+    return submitLeakAction(id, action)
+  }
   const meta = moduleMeta(key)
   const target = meta.actionTargets[action]
   if (!target) {
@@ -61,18 +67,27 @@ export function resetModule(key: string): PageResult {
   return listEntries(key)
 }
 
-export function exportEntries(key: string): { filename: string; content: string } {
-  const meta = moduleMeta(key)
+// 导出册子与列表共用一份取数口径：筛选条件一致、行内判定一致。
+function toCsv(meta: ModuleMeta, rows: EntryRow[]): string {
   const header = ['编号', ...meta.fields, '当前状态']
   const lines = [header.join(',')]
-  for (const row of listRows(key)) {
+  for (const row of rows) {
     lines.push([row.id, ...meta.fields.map((field) => row[field] ?? ''), row.status].join(','))
   }
-  return { filename: `${meta.name}-清单.csv`, content: `\uFEFF${lines.join('\n')}` }
+  return `\uFEFF${lines.join('\n')}`
 }
 
-export function downloadEntries(key: string): void {
-  const { filename, content } = exportEntries(key)
+export function exportEntries(
+  key: string,
+  filters: Record<string, string> = {},
+): { filename: string; content: string } {
+  const meta = moduleMeta(key)
+  const { items } = listEntries(key, filters)
+  return { filename: `${meta.name}-清单.csv`, content: toCsv(meta, items) }
+}
+
+export function downloadEntries(key: string, filters: Record<string, string> = {}): void {
+  const { filename, content } = exportEntries(key, filters)
   const blob = new Blob([content], { type: 'text/csv;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
@@ -82,6 +97,11 @@ export function downloadEntries(key: string): void {
   anchor.click()
   document.body.removeChild(anchor)
   URL.revokeObjectURL(url)
+}
+
+/** 抢修处置待复核清单：探漏「需复探」结论统一从探漏口径取，不在抢修侧另判。 */
+export function listRepairReviews(): EntryRow[] {
+  return listReinspectionReviews()
 }
 
 export function loadOverview(): OverviewResult {
