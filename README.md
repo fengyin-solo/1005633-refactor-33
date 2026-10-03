@@ -68,4 +68,9 @@ npm run build
 - 字段、状态、动作与流转目标集中在 `frontend/src/data/modules.ts`；示例数据在
   `frontend/src/data/seed.ts`。
 - 状态流转只允许在 `local-service.ts` 里改，页面组件不做业务判断。
-- 想回到初始数据：清掉浏览器里 `district-heating:entries` 这一项，或调用 `resetModule(模块)`。
+- 管网探漏是例外：取数、判定、导出、结论提交集中在 `frontend/src/data/leakdetect.ts`，
+  探漏列表与导出册子共用这一份口径。「已处理 / 需复探」只按探漏班组统一的现场探测方法判，
+  复探周期由班组排；存量漏点数量按采集顺序回填一次，历史已处理保留原结论；漏点数量无效或
+  探测方法不在班组目录的先退回；需复探结论会进抢修处置页的待复核清单。
+- 想回到初始数据：清掉浏览器里 `district-heating:entries` 这一项，或调用 `resetModule(模块)`
+  （探漏还需清掉 `district-heating:leak-backfill:v1`、`district-heating:leak-journal:v1`）。

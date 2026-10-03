@@ -24,6 +24,29 @@
       </span>
     </p>
 
+    <section class="review-block">
+      <h3>探漏复探待复核清单（{{ reviews.length }}）</h3>
+      <p class="review-hint">来源：管网探漏判为「需复探」的结论，复探周期由探漏班组统一排期。</p>
+      <table class="data-table" v-if="reviews.length">
+        <thead>
+          <tr>
+            <th v-for="column in reviewColumns" :key="column">{{ column }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in reviews" :key="`review-${item.leakId}`">
+            <td>{{ item.code || '—' }}</td>
+            <td>{{ item.segment || '—' }}</td>
+            <td>{{ item.method || '—' }}</td>
+            <td>{{ item.count }}</td>
+            <td>{{ item.advice }}</td>
+            <td>{{ item.submittedAt || '待班组登记' }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p v-else class="empty-state">暂无待复核的复探结论</p>
+    </section>
+
     <form class="filter-bar" @submit.prevent="reload">
       <label v-for="field in filterFields" :key="field" class="filter-item">
         <span>{{ field }}</span>
@@ -79,6 +102,7 @@ import {
   moduleMeta,
   runAction as applyAction,
 } from '@/api/local-service'
+import { listReinspectReviews, type ReinspectReview } from '@/data/leakdetect'
 import type { EntryRow } from '@/data/types'
 
 const meta = moduleMeta('emergencyrepair')
@@ -86,8 +110,10 @@ const columns = ["抢修编号", "故障管段", "故障类型", "影响面积",
 const actions = ["派出抢修", "确认恢复", "上报升级"]
 const statuses = ["待派修", "抢修中", "已恢复", "已升级"]
 const stats = [{"label": "待派修故障", "value": 0}, {"label": "抢修中故障", "value": 0}, {"label": "本月恢复数", "value": 0}]
+const reviewColumns = ["探漏编号", "探测管段", "现场探测方法", "漏点数量", "复探结论", "结论提交时间"]
 
 const rows = ref<EntryRow[]>([])
+const reviews = ref<ReinspectReview[]>([])
 const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
@@ -128,6 +154,7 @@ function reload() {
     const payload = listEntries(meta.key, filters.value)
     rows.value = payload.items
     total.value = payload.total
+    reviews.value = listReinspectReviews()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '抢修处置列表读取失败'
   }
